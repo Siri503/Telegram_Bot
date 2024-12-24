@@ -3,6 +3,11 @@ const TelegramBot = require('node-telegram-bot-api');
 
 const token = process.env.BOT_TOKEN; 
 
+if (!token) {
+  console.error('BOT_TOKEN is not defined in the environment variables!');
+  process.exit(1);
+}
+
 const bot = new TelegramBot(token, { polling: true });
 
 const mainMenuKeyboard = {
@@ -18,8 +23,13 @@ const mainMenuKeyboard = {
       ['/mygames', '/newgame', '/listgames'],
     ],
     resize_keyboard: true,
-    one_time_keyboard: true,
+    one_time_keyboard: false,
   },
+};
+
+const sendBotFatherInstructions = (chatId, action) => {
+  const instructions = `To ${action}, use BotFather and follow the instructions.`;
+  bot.sendMessage(chatId, instructions, mainMenuKeyboard);
 };
 
 bot.onText(/\/start/, (msg) => {
@@ -42,71 +52,22 @@ bot.onText(/\/mybots/, (msg) => {
   bot.sendMessage(chatId, 'You can edit your bots through BotFather. For more details, visit: https://core.telegram.org/bots', mainMenuKeyboard);
 });
 
-bot.onText(/\/setname/, (msg) => {
-  const chatId = msg.chat.id;
-  bot.sendMessage(chatId, 'To change the bot\'s name, use BotFather and follow the instructions.');
-});
+// Send BotFather Instructions for different commands
+bot.onText(/\/setname/, (msg) => sendBotFatherInstructions(msg.chat.id, "change the bot's name"));
+bot.onText(/\/setdescription/, (msg) => sendBotFatherInstructions(msg.chat.id, "change the bot description"));
+bot.onText(/\/setabouttext/, (msg) => sendBotFatherInstructions(msg.chat.id, "change the bot about info"));
+bot.onText(/\/setuserpic/, (msg) => sendBotFatherInstructions(msg.chat.id, "change the bot profile photo"));
+bot.onText(/\/setcommands/, (msg) => sendBotFatherInstructions(msg.chat.id, "change the bot commands"));
+bot.onText(/\/deletebot/, (msg) => sendBotFatherInstructions(msg.chat.id, "delete your bot"));
 
-bot.onText(/\/setdescription/, (msg) => {
-  const chatId = msg.chat.id;
-  bot.sendMessage(chatId, 'To change the bot description, use BotFather and follow the instructions.');
-});
+bot.onText(/\/token/, (msg) => sendBotFatherInstructions(msg.chat.id, "generate an authorization token"));
+bot.onText(/\/revoke/, (msg) => sendBotFatherInstructions(msg.chat.id, "revoke your bot's access token"));
 
-bot.onText(/\/setabouttext/, (msg) => {
-  const chatId = msg.chat.id;
-  bot.sendMessage(chatId, 'To change the bot about info, use BotFather and follow the instructions.');
-});
-
-bot.onText(/\/setuserpic/, (msg) => {
-  const chatId = msg.chat.id;
-  bot.sendMessage(chatId, 'To change the bot profile photo, use BotFather and follow the instructions.');
-});
-
-bot.onText(/\/setcommands/, (msg) => {
-  const chatId = msg.chat.id;
-  bot.sendMessage(chatId, 'To change the bot commands, use BotFather and follow the instructions.');
-});
-
-bot.onText(/\/deletebot/, (msg) => {
-  const chatId = msg.chat.id;
-  bot.sendMessage(chatId, 'To delete your bot, use BotFather and follow the instructions.');
-});
-
-// Handling Bot Settings commands
-bot.onText(/\/token/, (msg) => {
-  const chatId = msg.chat.id;
-  bot.sendMessage(chatId, 'To generate an authorization token for your bot, use BotFather and follow the instructions.');
-});
-
-bot.onText(/\/revoke/, (msg) => {
-  const chatId = msg.chat.id;
-  bot.sendMessage(chatId, 'To revoke your bot\'s access token, use BotFather and follow the instructions.');
-});
-
-bot.onText(/\/setinline/, (msg) => {
-  const chatId = msg.chat.id;
-  bot.sendMessage(chatId, 'To toggle inline mode, use BotFather and follow the instructions.');
-});
-
-bot.onText(/\/setinlinegeo/, (msg) => {
-  const chatId = msg.chat.id;
-  bot.sendMessage(chatId, 'To toggle inline location requests, use BotFather and follow the instructions.');
-});
-
-bot.onText(/\/setinlinefeedback/, (msg) => {
-  const chatId = msg.chat.id;
-  bot.sendMessage(chatId, 'To change inline feedback settings, use BotFather and follow the instructions.');
-});
-
-bot.onText(/\/setjoingroups/, (msg) => {
-  const chatId = msg.chat.id;
-  bot.sendMessage(chatId, 'To allow your bot to be added to groups, use BotFather and follow the instructions.');
-});
-
-bot.onText(/\/setprivacy/, (msg) => {
-  const chatId = msg.chat.id;
-  bot.sendMessage(chatId, 'To toggle privacy mode in groups, use BotFather and follow the instructions.');
-});
+bot.onText(/\/setinline/, (msg) => sendBotFatherInstructions(msg.chat.id, "toggle inline mode"));
+bot.onText(/\/setinlinegeo/, (msg) => sendBotFatherInstructions(msg.chat.id, "toggle inline location requests"));
+bot.onText(/\/setinlinefeedback/, (msg) => sendBotFatherInstructions(msg.chat.id, "change inline feedback settings"));
+bot.onText(/\/setjoingroups/, (msg) => sendBotFatherInstructions(msg.chat.id, "allow your bot to be added to groups"));
+bot.onText(/\/setprivacy/, (msg) => sendBotFatherInstructions(msg.chat.id, "toggle privacy mode in groups"));
 
 bot.onText(/\/myapps/, (msg) => {
   const chatId = msg.chat.id;
@@ -128,15 +89,25 @@ bot.onText(/\/newgame/, (msg) => {
   bot.sendMessage(chatId, 'To create a new game, refer to the Telegram Bot API documentation.');
 });
 
+// Handle user messages and prevent errors
 bot.on('message', (msg) => {
   const chatId = msg.chat.id;
   const text = msg.text.toLowerCase();
   
-  if (!text.startsWith('/') && text.trim() !== '') {
+  if (!text.startsWith('/') && text.trim() !== '' && !['/start', '/help'].includes(text)) {
     bot.sendMessage(chatId, 'I\'m here to assist you with bot-related tasks. Please use the commands from the keyboard or type /help to get started.', mainMenuKeyboard);
   }
 });
 
+// Handling polling errors
 bot.on('polling_error', (error) => {
   console.log('Polling error:', error);
+  // Check if the error is due to a conflict and stop polling
+  if (error.code === 'ETELEGRAM' && error.response.body.error_code === 409) {
+    console.log('Polling conflict detected, stopping polling and switching to webhook...');
+    bot.stopPolling();
+    
+    // Optional: Set up the webhook if needed
+    // bot.setWebHook('https://your-server.com/path/to/receive/updates');
+  }
 });
